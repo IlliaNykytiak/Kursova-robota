@@ -36,7 +36,6 @@ namespace WebApplication1.Clients
                 var result = JsonConvert.DeserializeObject<MovieList>(body);
                 return result;
             }
-
         }
     }
 }

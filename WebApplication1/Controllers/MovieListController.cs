@@ -16,10 +16,12 @@ namespace WebApplication1.Controllers
         [HttpGet]
         public List<string> MovieTitles(int start_year, int end_year, double min_imdb, double max_imdb)
         {
+            Database db = new Database();
             MovieClient client = new MovieClient();
             MovieList movieList = client.GetMovieListIMDBRating(start_year, end_year, min_imdb, max_imdb).Result;
+            db.InsertMovieListAsync(movieList);
             List<string> titles = new List<string>();
-            List<double> rating = new List<double>();
+            //List<double> rating = new List<double>();
 
             if (movieList.results != null)
             {
