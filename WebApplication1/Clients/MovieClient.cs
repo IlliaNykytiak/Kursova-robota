@@ -13,7 +13,6 @@ namespace WebApplication1.Clients
             _address = Constants.Address;
             _apikey = Constants.ApiKey;
             _apihost = Constants.ApiHost;
-
         }
         public async Task<MovieList> GetMovieListIMDBRating(int start_year, int end_year, double min_imdb, double max_imdb)
         {
