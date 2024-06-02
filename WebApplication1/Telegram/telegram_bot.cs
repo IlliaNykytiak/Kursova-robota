@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Caching.Memory;
+using System.Threading;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -10,6 +11,7 @@ namespace WebApplication1.Telegram
 {
     public class telegram_bot
     {
+        private int i = 0;
         private readonly IMemoryCache _cache;
         Dictionary<long, (int start_year, int end_year, int min_imdb, int max_imdb)> chatParameters = new Dictionary<long, (int, int, int, int)>();
         private ITelegramBotClient? botClient;
@@ -51,19 +53,19 @@ namespace WebApplication1.Telegram
                 {
                     await botClient.SendTextMessageAsync(
                         chatId: message.Chat,
-                        text: "Привіт! Я бот, який допоможе тобі знайти фільми, які ти зможеш додати до списку \"Хочу переглянути\". Щоб почати, введи /enterValues."
+                        text: "Привіт! Я бот, який допоможе тобі знайти фільми, які ти зможеш додати до списку \"Хочу переглянути\". Щоб почати, введи /entervalues."
                     );
                     return;
                 }
-                if (message.Text.StartsWith("/enterValues"))
+                if (message.Text.StartsWith("/entervalues"))
                 {
                     await botClient.SendTextMessageAsync(
                         chatId: message.Chat,
-                        text: "Напиши початковий рік випуску фільму, кінцевий рік випуску фільму, мінімальний рейтинг imdb та максимальний рейтинг imdb в форматі: **** **** * *. Щоб продовжити, введіть /searchList"
+                        text: "Напиши початковий рік випуску фільму, кінцевий рік випуску фільму, мінімальний рейтинг imdb та максимальний рейтинг imdb в форматі: /searchlist **** **** * *. Наприклад, /searchlist 2016 2017 6 8"
                     );
                     return;
                 }
-                if (message.Text.StartsWith("/searchList"))
+                if (message.Text.StartsWith("/searchlist"))
                 {
                     var movieClient = new MovieClient();
                     if (message.Type == MessageType.Text)
@@ -85,38 +87,70 @@ namespace WebApplication1.Telegram
                         {
                             await botClient.SendTextMessageAsync(
                                 chatId: message.Chat,
-                                text: "Введіть команду у форматі: /enterValues start_year end_year min_imdb max_imdb"
+                                text: "Введіть команду у форматі: /searchlist start_year end_year min_imdb max_imdb. Наприклад, /searchlist 2016 2017 6 8"
                             );
                             return;
                         }
                     }
                     var parameters = chatParameters[message.Chat.Id];
                     var movieList = await movieClient.GetMovieListIMDBRating(parameters.start_year, parameters.end_year, parameters.min_imdb, parameters.max_imdb);
-                    _cache.Set("MovieList", movieList);
-                    var titles = movieList.results.Select(m => m.title).ToList();
-                    var titlesString = string.Join("\n", titles);
+                    if (movieList != null && movieList.results.Length != 0)
+                    {
+                        _cache.Set("MovieList", movieList);
+                        var titles = movieList.results.Select(m => m.title).ToList();
+                        var titlesString = string.Join("\n", titles);
 
-                    await botClient.SendTextMessageAsync(
-                        chatId: message.Chat,
-                        text: titlesString
-                    );
-                    return;
+                        await botClient.SendTextMessageAsync(
+                            chatId: message.Chat,
+                            text: titlesString
+                        );
+                        await botClient.SendTextMessageAsync(
+                            chatId: message.Chat,
+                            text: "Щоб отримати інформацію про фільм, введіть /getmovie Назва фільму. Наприклад, /getmovie The Shawshank Redemption."
+                        );
+                        return;
+                    }
+                    else
+                    {
+                        await botClient.SendTextMessageAsync(
+                            chatId: message.Chat,
+                            text: "Фільмів за вашим запитом не знайдено."
+                        );
+                    }
                 }
-                if (message.Text.StartsWith("/getMovie"))
+                if (message.Text.StartsWith("/getmovie") && message.Text.Length > 9 && _cache.TryGetValue("MovieList", out MovieList movie))
                 {
+                    var urlList = new List<string>();
                     var movieList = _cache.Get<MovieList>("MovieList");
                     var title = message.Text.Substring(10);
-                    if (movieList != null && movieList.results != null)
+                    if (movieList != null && movieList.results.Length != 0)
                     {
                         foreach (var result in movieList.results)
                         {
                             if (result.title == title)
                             {
+                                foreach (var image in result.imageurl)
+                                {
+                                    urlList.Add(image);
+                                }
+                                await botClient.SendPhotoAsync(
+                                    chatId: message.Chat,
+                                    photo: InputFile.FromUri(urlList[0]),
+                                    caption: $"Назва: {result.title}\nЖанр: {string.Join(", ", result.genre)}\nРік випуску: {result.released}\nРейтинг IMDB: {result.imdbrating}\nСинопсис: {result.synopsis}",
+                                    parseMode: ParseMode.Html,
+                                    cancellationToken: token);
+                                return;
+                            }
+                            else
+                            {
+                                i++;
+                            }
+                            if (i == movieList.results.Length)
+                            {
                                 await botClient.SendTextMessageAsync(
                                     chatId: message.Chat,
-                                    text: $"Назва: {result.title}\nЖанр: {string.Join(", ", result.genre)}\nРік випуску: {result.released}\nРейтинг IMDB: {result.imdbrating}\nСинопсис: {result.synopsis}"
+                                    text: "Фільмів за вашим запитом не знайдено."
                                 );
-                                return;
                             }
                         }
                     }
@@ -124,10 +158,18 @@ namespace WebApplication1.Telegram
                     {
                         await botClient.SendTextMessageAsync(
                             chatId: message.Chat,
-                            text: "Movie list is not available."
+                            text: "Фільмів за вашим запитом не знайдено."
                         );
                     }
                     return;
+                }
+                else
+                {
+
+                    await botClient.SendTextMessageAsync(
+                         chatId: message.Chat,
+                         text: "Введіть команду у форматі: /getmovie Назва фільму. Наприклад, /getmovie The Shawshank Redemption."
+                     );
                 }
             }
         }
