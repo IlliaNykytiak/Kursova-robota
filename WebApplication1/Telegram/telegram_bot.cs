@@ -1,26 +1,31 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Text.RegularExpressions;
-using System.Threading;
+﻿using Microsoft.Extensions.Caching.Memory;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
 using WebApplication1.Clients;
+using WebApplication1.Models;
 
 namespace WebApplication1.Telegram
 {
     public class telegram_bot
     {
+        private readonly IMemoryCache _cache;
         Dictionary<long, (int start_year, int end_year, int min_imdb, int max_imdb)> chatParameters = new Dictionary<long, (int, int, int, int)>();
         private ITelegramBotClient? botClient;
         private static string? _botApiKey;
+
+        public telegram_bot(IMemoryCache cache)
+        {
+            _cache = cache;
+        }
 
         public telegram_bot()
         {
             _botApiKey = Constants.TelegramBotApiKey;
             botClient = null;
         }
+
         public async void InitializeBot()
         {
             botClient = new TelegramBotClient(_botApiKey);
@@ -30,7 +35,7 @@ namespace WebApplication1.Telegram
         }
         ReceiverOptions receiverOptions = new()
         {
-            AllowedUpdates = Array.Empty<UpdateType>() 
+            AllowedUpdates = Array.Empty<UpdateType>()
         };
 
         private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken token)
@@ -82,11 +87,12 @@ namespace WebApplication1.Telegram
                                 chatId: message.Chat,
                                 text: "Введіть команду у форматі: /enterValues start_year end_year min_imdb max_imdb"
                             );
+                            return;
                         }
                     }
                     var parameters = chatParameters[message.Chat.Id];
                     var movieList = await movieClient.GetMovieListIMDBRating(parameters.start_year, parameters.end_year, parameters.min_imdb, parameters.max_imdb);
-
+                    _cache.Set("MovieList", movieList);
                     var titles = movieList.results.Select(m => m.title).ToList();
                     var titlesString = string.Join("\n", titles);
 
@@ -94,6 +100,33 @@ namespace WebApplication1.Telegram
                         chatId: message.Chat,
                         text: titlesString
                     );
+                    return;
+                }
+                if (message.Text.StartsWith("/getMovie"))
+                {
+                    var movieList = _cache.Get<MovieList>("MovieList");
+                    var title = message.Text.Substring(10);
+                    if (movieList != null && movieList.results != null)
+                    {
+                        foreach (var result in movieList.results)
+                        {
+                            if (result.title == title)
+                            {
+                                await botClient.SendTextMessageAsync(
+                                    chatId: message.Chat,
+                                    text: $"Назва: {result.title}\nЖанр: {string.Join(", ", result.genre)}\nРік випуску: {result.released}\nРейтинг IMDB: {result.imdbrating}\nСинопсис: {result.synopsis}"
+                                );
+                                return;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        await botClient.SendTextMessageAsync(
+                            chatId: message.Chat,
+                            text: "Movie list is not available."
+                        );
+                    }
                     return;
                 }
             }
@@ -106,7 +139,15 @@ namespace WebApplication1.Telegram
     }
     public class TelegramBotHostedService : IHostedService
     {
+        private readonly IMemoryCache _cache;
         telegram_bot bot = new telegram_bot();
+
+        public TelegramBotHostedService(IMemoryCache cache)
+        {
+            _cache = cache;
+            bot = new telegram_bot(_cache);
+        }
+
         public Task StartAsync(CancellationToken cancellationToken)
         {
             bot.InitializeBot();
@@ -115,7 +156,7 @@ namespace WebApplication1.Telegram
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            // If you have any cleanup to do when your application stops, do it here.
+            // Add code here to handle what should happen when your service stops.
             return Task.CompletedTask;
         }
     }
@@ -123,6 +164,7 @@ namespace WebApplication1.Telegram
     {
         public static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
         {
+            services.AddMemoryCache();
             services.AddHostedService<TelegramBotHostedService>();
             // Add services to the container.
         }
