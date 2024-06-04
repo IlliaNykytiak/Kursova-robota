@@ -1,8 +1,4 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using WebApplication1;
-using WebApplication1.Telegram;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +26,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 // Use Startup class
-Startup.Configure(app);
+Startup.Configure(app, app.Environment);
 
 app.Run();

@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Caching.Memory;
 using WebApplication1.Clients;
 using WebApplication1.Models;
-using WebApplication1.Telegram;
 
 namespace WebApplication1.Controllers
 {
@@ -20,35 +19,29 @@ namespace WebApplication1.Controllers
         }
 
         [HttpGet("GetMovieListIMDBRating")]
-        public List<string> MovieTitles(int start_year, int end_year, double min_imdb, double max_imdb)
+        public MovieList MovieTitles(int start_year, int end_year, double min_imdb, double max_imdb)
         {
             MovieClient client = new MovieClient();
             var movieList = client.GetMovieListIMDBRating(start_year, end_year, min_imdb, max_imdb).Result;
             _cache.Set("MovieList", movieList);
-            List<string> titles = new List<string>();
-            if (movieList.results != null)
-            {
-                foreach (var result in movieList.results)
-                {
-                    titles.Add(result.title);
-                }
-            }
-            return titles;
+            return movieList;
         }
 
         [HttpGet("GetMovieByTitle")]
-        public string GetMovieByTitle(string title)
+        public Result GetMovieByTitle(string title)
         {
             var movieList = _cache.Get<MovieList>("MovieList");
-            foreach (var result in movieList.results)
+            if (movieList?.results != null)
             {
-                if (result.title == title)
+                foreach (var result in movieList.results)
                 {
-                    return "1";
+                    if (result.title == title)
+                    {
+                        return result;
+                    }
                 }
-                return "Movie not found";
             }
-            return "Movie not found";
+            return null;
         }
     }
 }
