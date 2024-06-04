@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using Telegram.Bot.Types;
 using WebApplication1.Clients;
 using WebApplication1.Models;
 
@@ -12,7 +11,6 @@ namespace WebApplication1.Controllers
     {
         private readonly ILogger<MovieListController> _logger;
         private readonly IMemoryCache _cache;
-
         public MovieListController(ILogger<MovieListController> logger, IMemoryCache cache)
         {
             _logger = logger;
@@ -58,7 +56,6 @@ namespace WebApplication1.Controllers
                 _logger.LogError(ex, "Error key");
                 return StatusCode(500, "An error occurred while searching the key");
             }
-
         }
 
         [HttpPost("AddMovie")]
@@ -69,7 +66,6 @@ namespace WebApplication1.Controllers
             {
                 return BadRequest("Movie is null");
             }
-
             try
             {
                 await db.ToWatchList(ID, movie.title, movie.type, movie.genre[0], movie.imageurl[0], movie.released, movie.imdbid, movie.imdbrating, movie.synopsis);
@@ -90,7 +86,6 @@ namespace WebApplication1.Controllers
             {
                 return BadRequest("Movie is null");
             }
-
             try
             {
                 int key = await db.GetKeyByTitle(movie.title, id);
@@ -125,6 +120,7 @@ namespace WebApplication1.Controllers
                 return StatusCode(500, "An error occurred while deleting the movie");
             }
         }
+
         [HttpDelete("ClearToWatchList/{id}")]
         public async Task<IActionResult> ClearToWatchList(int id)
         {
@@ -140,6 +136,5 @@ namespace WebApplication1.Controllers
                 return StatusCode(500, "An error occurred while deleting the movie");
             }
         }
-
     }
 }
